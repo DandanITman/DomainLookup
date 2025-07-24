@@ -36,7 +36,7 @@ const prompt = ai.definePrompt({
   output: {schema: GenerateDomainNamesOutputSchema},
   prompt: `You are a domain name expert specializing in generating creative and relevant domain names based on application descriptions.
 
-  Generate five domain names for the application described below:
+  Generate five domain names for the application described below. IMPORTANT: Only return the name, do not include any TLD like .com, .app, .io, etc.
 
   Application Description: {{{applicationDescription}}}
 

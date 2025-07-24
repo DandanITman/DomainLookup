@@ -33,7 +33,7 @@ export async function findAvailableDomains(description: string): Promise<FindDom
         while (available.length < 5 && attempts < 5) { // Safety break after 5 GenAI calls
             const result = await generateDomainNames({ applicationDescription: description });
             
-            const suggestions = result.domainNames.map(name => name.toLowerCase().replace(/[^a-z0-9]/g, '')).filter(d => d && !processed.has(d));
+            const suggestions = result.domainNames.map(name => name.toLowerCase().split('.')[0].replace(/[^a-z0-9-]/g, '')).filter(d => d && !processed.has(d));
 
             for (const name of suggestions) {
                 if (available.length >= 5) break;
