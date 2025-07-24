@@ -80,10 +80,17 @@ export default function DomainFinder() {
                 return;
             }
             
-            setResults(res.results);
+            const uniqueResults = res.results.filter((result, index, self) => 
+                index === self.findIndex((t) => (
+                    t.domain === result.domain
+                ))
+            );
 
-            const availableCount = res.results.filter(r => r.available).length;
-            if (res.results.length > 0 && availableCount === 0) {
+            const finalResults = uniqueResults.slice(0, MAX_DOMAINS_TO_SHOW);
+            setResults(finalResults);
+
+            const availableCount = finalResults.filter(r => r.available).length;
+            if (finalResults.length > 0 && availableCount === 0) {
                 toast({
                    variant: 'destructive',
                    title: 'No luck this time',
