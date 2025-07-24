@@ -29,7 +29,7 @@ export async function checkDomainAvailability(domains: string[]): Promise<string
     }
 
     try {
-        const response = await fetch(GODADDY_API_URL, {
+        const response = await fetch(`${GODADDY_API_URL}?checkType=FAST`, {
             method: 'POST',
             headers: {
                 'Authorization': `sso-key ${apiKey}:${apiSecret}`,
@@ -40,11 +40,13 @@ export async function checkDomainAvailability(domains: string[]): Promise<string
         });
 
         if (!response.ok) {
-            console.error(`GoDaddy API error: ${response.status} ${response.statusText}`);
             const errorBody = await response.text();
-            console.error('Error Body:', errorBody);
+            console.error(`GoDaddy API error: ${response.status} ${response.statusText}`, errorBody);
             if (response.status === 401) {
                 throw new Error("GoDaddy authentication failed. Please check your GODADDY_API_KEY and GODADDY_API_SECRET.");
+            }
+             if (response.status === 422) {
+                console.error("GoDaddy API error: One or more domain names are invalid.");
             }
             // If the API call fails for another reason, return an empty array.
             return [];
