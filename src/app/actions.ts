@@ -12,26 +12,23 @@ interface FindDomainsResult {
 }
 
 export async function findAvailableDomains(description: string): Promise<FindDomainsResult> {
-    console.log("Starting findAvailableDomains function for debugging...");
-
     try {
-        // HARDCODED FOR DEBUGGING
-        const suggestions = ['peppercornnn'];
-        const domainsToCkeck = suggestions.map(d => `${d}.com`);
-        console.log("Checking hardcoded domain:", domainsToCkeck);
+        const { domainNames } = await generateDomainNames({ applicationDescription: description });
 
+        if (!domainNames || domainNames.length === 0) {
+            return { success: true, results: [] };
+        }
 
-        const availableDomains = await checkDomainAvailability(domainsToCkeck);
+        const uniqueSuggestions = [...new Set(domainNames.map(d => d.toLowerCase().replace(/[^a-z0-9-]/g, '')))];
+        const domainsToCheck = uniqueSuggestions.map(d => `${d}.com`);
         
-        console.log("Available domains returned from checkDomainAvailability:", availableDomains);
-
-        const results = suggestions.map(suggestion => ({
+        const availableDomains = await checkDomainAvailability(domainsToCheck);
+        
+        const results = uniqueSuggestions.map(suggestion => ({
             domain: suggestion,
             available: availableDomains.includes(`${suggestion}.com`),
         }));
         
-        console.log("Final results being sent to client:", results);
-
         return { 
             success: true, 
             results
@@ -40,8 +37,8 @@ export async function findAvailableDomains(description: string): Promise<FindDom
     } catch (error) {
         console.error("Error finding available domains:", error);
         if (error instanceof Error) {
-            if (error.message.includes('GODADDY_API_KEY')) {
-                 return { success: false, error: 'GoDaddy API Key is missing. Please set it in your .env file.', results: [] };
+            if (error.message.includes('GODADDY_API_KEY') || error.message.includes('DOMAINR_API_KEY')) {
+                 return { success: false, error: 'The domain registrar API Key is missing. Please set it in your .env file.', results: [] };
             }
             if (error.message.includes('GEMINI_API_KEY') || error.message.includes('GOOGLE_API_KEY')) {
                  return { success: false, error: 'Gemini API Key is missing. Please set it in your .env file to generate domain ideas.', results: [] };
