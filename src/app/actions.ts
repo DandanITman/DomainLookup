@@ -16,7 +16,7 @@ export async function findAvailableDomains(description: string): Promise<FindDom
 
     try {
         // HARDCODED FOR DEBUGGING
-        const suggestions = ['scooperific'];
+        const suggestions = ['peppercornnn'];
         const domainsToCkeck = suggestions.map(d => `${d}.com`);
         console.log("Checking hardcoded domain:", domainsToCkeck);
 
