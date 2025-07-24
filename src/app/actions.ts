@@ -2,15 +2,8 @@
 'use server';
 
 import { generateDomainNames } from '@/ai/flows/generate-domain-names';
+import { checkDomainAvailability } from '@/services/domain-api';
 
-// Mocked domain availability check.
-async function checkDomain(domain: string): Promise<boolean> {
-    await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
-    // Simulate that shorter, more common names are less likely to be available.
-    const lengthFactor = Math.min(domain.length / 15, 1); // Normalize length up to 15 chars
-    const availabilityChance = 0.1 + lengthFactor * 0.4; // Base 10%, up to 50% for longer names
-    return Math.random() < availabilityChance;
-}
 
 interface FindDomainsResult {
     success: boolean;
@@ -35,20 +28,24 @@ export async function findAvailableDomains(description: string): Promise<FindDom
             
             const suggestions = result.domainNames.map(name => name.toLowerCase().split('.')[0].replace(/[^a-z0-9-]/g, '')).filter(d => d && !processed.has(d));
 
-            for (const name of suggestions) {
-                if (available.length >= 5) break;
-
+            const availabilityChecks = suggestions.map(async (name) => {
+                if (processed.has(name)) return;
                 processed.add(name);
-                const isAvailable = await checkDomain(name + '.com');
 
-                if (isAvailable) {
-                    available.push(name);
-                } else {
-                    if (unavailable.length < 10) { // Limit the number of "garbaged" names shown
-                        unavailable.push(name);
+                try {
+                    const isAvailable = await checkDomainAvailability(name + '.com');
+                    if (isAvailable) {
+                        if(available.length < 5) available.push(name);
+                    } else {
+                        if (unavailable.length < 10) unavailable.push(name);
                     }
+                } catch (e) {
+                     if (unavailable.length < 10) unavailable.push(name);
                 }
-            }
+            });
+
+            await Promise.all(availabilityChecks);
+
             attempts++;
         }
 
@@ -60,6 +57,9 @@ export async function findAvailableDomains(description: string): Promise<FindDom
 
     } catch (error) {
         console.error("Error finding available domains:", error);
+        if (error instanceof Error && error.message.includes('API key')) {
+            return { success: false, error: error.message };
+        }
         return { success: false, error: 'An unexpected error occurred while generating domains.' };
     }
 }
