@@ -46,7 +46,7 @@ function AvailableDomainCard({ domain, onSelect }: { domain: string, onSelect: (
     );
 }
 
-const MAX_ATTEMPTS = 5; // 5 attempts * 10 domains/attempt = 50 domains
+const MAX_DOMAINS_TO_CHECK = 150;
 const REQUIRED_AVAILABLE = 5;
 
 export default function DomainFinder() {
@@ -54,33 +54,35 @@ export default function DomainFinder() {
     const [results, setResults] = useState<DomainResult[]>([]);
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
-    const attempts = useRef(0);
-    const availableCount = useRef(0);
+    
     const stopSearching = useRef(false);
     const processedDomains = useRef(new Set<string>());
+    const domainsChecked = useRef(0);
+    const availableCount = useRef(0);
+
 
     const resetState = () => {
         setResults([]);
-        attempts.current = 0;
+        processedDomains.current.clear();
+        domainsChecked.current = 0;
         availableCount.current = 0;
         stopSearching.current = false;
-        processedDomains.current.clear();
     };
 
     const fetchAndCheckDomains = useCallback(async () => {
-        if (stopSearching.current || attempts.current >= MAX_ATTEMPTS) {
-            if (availableCount.current === 0 && !stopSearching.current) {
+        if (stopSearching.current) return;
+
+        if (domainsChecked.current >= MAX_DOMAINS_TO_CHECK) {
+            if (availableCount.current === 0) {
                  toast({
                     variant: 'destructive',
                     title: 'Search complete',
-                    description: "We couldn't find any available domains in the first 50 results. Try a more specific description or run the search again.",
+                    description: "We couldn't find any available domains in the first 150 results. Try a more specific description or run the search again.",
                 });
             }
             stopSearching.current = true;
             return;
         }
-
-        attempts.current += 1;
         
         const res = await findAvailableDomains(description);
 
@@ -95,53 +97,40 @@ export default function DomainFinder() {
             stopSearching.current = true;
             return;
         }
-
-        if (!res.available && !res.unavailable) {
-            console.error("API returned success but no domain lists.");
-            fetchAndCheckDomains(); // Try again
-            return;
+        
+        // Add new domains to the list with a 'checking' status, avoiding duplicates
+        const newDomainsToCheck: DomainResult[] = [];
+        res.results.forEach(result => {
+            if (!processedDomains.current.has(result.domain)) {
+                newDomainsToCheck.push({ domain: result.domain, status: 'checking' });
+                processedDomains.current.add(result.domain);
+            }
+        });
+        
+        // Add new unique domains to the results list
+        if (newDomainsToCheck.length > 0) {
+            setResults(prev => [...prev, ...newDomainsToCheck]);
         }
-        
-        const allNewDomains = (res.available || []).concat(res.unavailable || []);
-        const uniqueNewDomains = allNewDomains.filter(d => !processedDomains.current.has(d));
-        
-        const checkingDomains: DomainResult[] = uniqueNewDomains.map(d => {
-            processedDomains.current.add(d);
-            return { domain: d, status: 'checking' };
-        });
 
-        // Add new domains to be checked
-        setResults(prev => {
-            const existingDomains = new Set(prev.map(r => r.domain));
-            const newResults = [...prev];
-            checkingDomains.forEach(cd => {
-                if (!existingDomains.has(cd.domain)) {
-                    newResults.push(cd);
-                }
-            });
-            return newResults;
-        });
-        
-        // Wait a moment before showing results to give a sense of "checking"
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Update status of each domain as it's checked
+        for (const result of res.results) {
+             if (stopSearching.current) break;
 
-        // Update available
-        if (res.available) {
-            res.available.forEach(domain => {
-                if (stopSearching.current) return;
-                setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: 'available' } : r));
+            await new Promise(resolve => setTimeout(resolve, 50)); // Small delay for UX
+            
+            const newStatus = result.available ? 'available' : 'unavailable';
+            
+            if (result.available) {
                 availableCount.current++;
-            });
-        }
-        // Update unavailable
-        if (res.unavailable) {
-            res.unavailable.forEach(domain => {
-                if (stopSearching.current) return;
-                setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: 'unavailable' } : r));
-            });
+            }
+
+            setResults(prev => prev.map(r => r.domain === result.domain ? { ...r, status: newStatus } : r));
+            domainsChecked.current++;
         }
 
-        if (availableCount.current < REQUIRED_AVAILABLE) {
+        if (availableCount.current < REQUIRED_AVAILABLE && !stopSearching.current) {
+            // Give a moment before fetching more
+            await new Promise(resolve => setTimeout(resolve, 300));
             fetchAndCheckDomains();
         } else {
             stopSearching.current = true;
@@ -183,6 +172,8 @@ export default function DomainFinder() {
 
     const availableResults = results.filter(r => r.status === 'available');
     const otherResults = results.filter(r => r.status !== 'available');
+
+    const showStopButton = isPending && !stopSearching.current && availableCount.current >= REQUIRED_AVAILABLE;
 
     return (
         <Card className="w-full shadow-2xl shadow-primary/10">
@@ -232,7 +223,7 @@ export default function DomainFinder() {
                         
                         {otherResults.length > 0 && (
                             <div>
-                                <h3 className="text-lg font-headline text-center my-4">Search progress...</h3>
+                                <h3 className="text-lg font-headline text-center my-4">Search progress... ({domainsChecked.current}/{MAX_DOMAINS_TO_CHECK})</h3>
                                 <ul className="space-y-2 rounded-lg border p-2 max-h-60 overflow-y-auto">
                                     {otherResults.map((res) => (
                                         <DomainListItem key={res.domain} domain={res.domain} status={res.status} />
@@ -243,8 +234,13 @@ export default function DomainFinder() {
                     </div>
                 )}
             </CardContent>
-            {results.length > 0 && (
-                <CardFooter>
+            {(results.length > 0 || isPending) && (
+                <CardFooter className="flex-col gap-2">
+                     {showStopButton && (
+                        <Button variant="ghost" className="w-full" onClick={() => (stopSearching.current = true)}>
+                            Stop Searching
+                        </Button>
+                     )}
                     <Button variant="outline" className="w-full" onClick={handleSubmit} disabled={isPending}>
                         {isPending && !stopSearching.current ? <Loader2 className="animate-spin" /> : <Sparkles />}
                         {isPending && !stopSearching.current ? 'Searching...' : 'I want different ones!'}

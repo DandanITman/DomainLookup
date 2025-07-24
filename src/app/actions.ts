@@ -7,75 +7,47 @@ import { checkDomainAvailability } from '@/services/domain-api';
 
 interface FindDomainsResult {
     success: boolean;
-    available: string[];
-    unavailable: string[];
+    results: { domain: string, available: boolean }[];
     error?: string;
 }
 
-// Function to shuffle an array
-function shuffle<T>(array: T[]): T[] {
-    let currentIndex = array.length,  randomIndex;
-  
-    // While there remain elements to shuffle.
-    while (currentIndex > 0) {
-      // Pick a remaining element.
-      randomIndex = Math.floor(Math.random() * currentIndex);
-      currentIndex--;
-  
-      // And swap it with the current element.
-      [array[currentIndex], array[randomIndex]] = [
-        array[randomIndex], array[currentIndex]];
-    }
-  
-    return array;
-}
-
-
 export async function findAvailableDomains(description: string): Promise<FindDomainsResult> {
     if (!description) {
-        return { success: false, error: 'Please provide a description for your application.', available: [], unavailable: [] };
+        return { success: false, error: 'Please provide a description for your application.', results: [] };
     }
 
     try {
-        const result = await generateDomainNames({ applicationDescription: description });
+        const genResult = await generateDomainNames({ applicationDescription: description });
         
-        const suggestions = result.domainNames
+        const suggestions = genResult.domainNames
             .map(name => name.toLowerCase().split('.')[0].replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, ''))
             .filter(d => d && d.length > 2);
 
         const uniqueSuggestions = Array.from(new Set(suggestions));
         
-        // Add the test domain
-        if (!uniqueSuggestions.includes('checkmatedomains')) {
-            uniqueSuggestions.push('checkmatedomains');
-        }
+        const results: { domain: string, available: boolean }[] = [];
 
-        const shuffledSuggestions = shuffle(uniqueSuggestions);
-        
-        const domainsToCheck = shuffledSuggestions.slice(0, 10);
-
-        if (domainsToCheck.length === 0) {
-            return { success: true, available: [], unavailable: [] };
+        for (const suggestion of uniqueSuggestions) {
+            const domain = `${suggestion}.com`;
+            const isAvailable = await checkDomainAvailability(domain);
+            results.push({ domain: suggestion, available: isAvailable });
         }
-        
-        const { available, unavailable } = await checkDomainAvailability(domainsToCheck.map(d => `${d}.com`));
         
         return { 
             success: true, 
-            available: available.map(d => d.replace('.com', '')),
-            unavailable: unavailable.map(d => d.replace('.com', '')),
+            results
         };
 
     } catch (error) {
         console.error("Error finding available domains:", error);
         if (error instanceof Error) {
             if (error.message.includes('GODADDY_API_KEY')) {
-                 return { success: false, error: 'GoDaddy API Key is missing. Please set it in your .env file.', available: [], unavailable: [] };
+                 return { success: false, error: 'GoDaddy API Key is missing. Please set it in your .env file.', results: [] };
             }
             if (error.message.includes('GEMINI_API_KEY') || error.message.includes('GOOGLE_API_KEY')) {
-                 return { success: false, error: 'Gemini API Key is missing. Please set it in your .env file to generate domain ideas.', available: [], unavailable: [] };
+                 return { success: false, error: 'Gemini API Key is missing. Please set it in your .env file to generate domain ideas.', results: [] };
             }
         }
-        return { success: false, error: 'An unexpected error occurred while generating domains.', available: [], unavailable: [] };
+        return { success: false, error: 'An unexpected error occurred while generating domains.', results: [] };
     }
 }
