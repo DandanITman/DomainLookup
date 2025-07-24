@@ -29,7 +29,7 @@ export async function checkDomainAvailability(domains: string[]): Promise<string
     }
 
     try {
-        const response = await fetch(`${GODADDY_API_URL}?checkType=FAST`, {
+        const response = await fetch(GODADDY_API_URL, {
             method: 'POST',
             headers: {
                 'Authorization': `sso-key ${apiKey}:${apiSecret}`,
@@ -39,25 +39,24 @@ export async function checkDomainAvailability(domains: string[]): Promise<string
             body: JSON.stringify(domains)
         });
 
+        const responseBody = await response.json() as any;
+
         if (!response.ok) {
-            const errorBody = await response.text();
-            console.error(`GoDaddy API error: ${response.status} ${response.statusText}`, errorBody);
+            console.error(`GoDaddy API error: ${response.status} ${response.statusText}`, responseBody);
             if (response.status === 401) {
                 throw new Error("GoDaddy authentication failed. Please check your GODADDY_API_KEY and GODADDY_API_SECRET.");
             }
              if (response.status === 422) {
-                console.error("GoDaddy API error: One or more domain names are invalid.");
+                console.error("GoDaddy API error: One or more domain names are invalid.", responseBody.fields);
             }
             // If the API call fails for another reason, return an empty array.
             return [];
         }
-
-        const data: { domains: { domain: string, available: boolean }[] } = await response.json() as any;
         
         // Filter for domains that are marked as available and return just their names.
-        return data.domains
-            .filter(d => d.available)
-            .map(d => d.domain);
+        return responseBody.domains
+            .filter((d: { domain: string, available: boolean }) => d.available)
+            .map((d: { domain: string, available: boolean }) => d.domain);
 
     } catch (error) {
         if (error instanceof Error && error.message.includes("GoDaddy authentication failed")) {
