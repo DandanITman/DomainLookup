@@ -19,19 +19,25 @@ export async function findAvailableDomains(description: string): Promise<FindDom
     try {
         const genResult = await generateDomainNames({ applicationDescription: description });
         
-        const suggestions = genResult.domainNames
+        let suggestions = genResult.domainNames
             .map(name => name.toLowerCase().split('.')[0].replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, ''))
             .filter(d => d && d.length > 2);
 
+        // Add the test domain as requested
+        suggestions.push('checkmatedomains');
+        
         const uniqueSuggestions = Array.from(new Set(suggestions));
         
-        const results: { domain: string, available: boolean }[] = [];
-
-        for (const suggestion of uniqueSuggestions) {
-            const domain = `${suggestion}.com`;
-            const isAvailable = await checkDomainAvailability(domain);
-            results.push({ domain: suggestion, available: isAvailable });
+        if (uniqueSuggestions.length === 0) {
+             return { success: true, results: [] };
         }
+
+        const availableDomains = await checkDomainAvailability(uniqueSuggestions.map(d => `${d}.com`));
+
+        const results = uniqueSuggestions.map(suggestion => ({
+            domain: suggestion,
+            available: availableDomains.includes(`${suggestion}.com`),
+        }));
         
         return { 
             success: true, 
