@@ -46,7 +46,7 @@ function AvailableDomainCard({ domain, onSelect }: { domain: string, onSelect: (
     );
 }
 
-const MAX_ATTEMPTS = 5; // Try 5 batches of 10 (50 domains total)
+const MAX_ATTEMPTS = 15; // Try 15 batches of 10 (150 domains total)
 const REQUIRED_AVAILABLE = 5;
 
 export default function DomainFinder() {
@@ -70,16 +70,19 @@ export default function DomainFinder() {
             if (availableCount.current === 0) {
                  toast({
                     variant: 'destructive',
-                    title: 'No domains found',
-                    description: "We couldn't find any available domains. Try a different description.",
+                    title: 'Search complete',
+                    description: "Couldn't find available domains in the first 150 results. Try a more specific description or run the search again.",
                 });
             }
+            stopSearching.current = true;
             return;
         }
 
         attempts.current += 1;
         
         const res = await findAvailableDomains(description);
+
+        if (stopSearching.current) return;
 
         if (!res.success) {
             toast({
@@ -90,17 +93,18 @@ export default function DomainFinder() {
             stopSearching.current = true;
             return;
         }
-
-        // Add new domains with 'checking' status
+        
         const checkingDomains: DomainResult[] = res.available.concat(res.unavailable).map(d => ({ domain: d, status: 'checking' }));
         setResults(prev => [...prev, ...checkingDomains]);
         
-        // Simulate checking by revealing status one by one
+        
         for (const domain of res.unavailable) {
-            await new Promise(resolve => setTimeout(resolve, 150)); // stagger updates
+            if (stopSearching.current) return;
+            await new Promise(resolve => setTimeout(resolve, 150)); 
             setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: 'unavailable' } : r));
         }
         for (const domain of res.available) {
+             if (stopSearching.current) return;
             await new Promise(resolve => setTimeout(resolve, 150));
             setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: 'available' } : r));
             availableCount.current++;
@@ -131,6 +135,12 @@ export default function DomainFinder() {
             fetchAndCheckDomains();
         });
     };
+    
+    useEffect(() => {
+        return () => {
+            stopSearching.current = true;
+        }
+    }, []);
 
     const handleCopyToClipboard = (domain: string) => {
         navigator.clipboard.writeText(`${domain}.com`);
@@ -205,8 +215,8 @@ export default function DomainFinder() {
             {results.length > 0 && (
                 <CardFooter>
                     <Button variant="outline" className="w-full" onClick={handleSubmit} disabled={isPending}>
-                        {isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                        {isPending ? 'Searching...' : 'I want different ones!'}
+                        {isPending && !stopSearching.current ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                        {isPending && !stopSearching.current ? 'Searching...' : 'I want different ones!'}
                     </Button>
                 </CardFooter>
             )}
