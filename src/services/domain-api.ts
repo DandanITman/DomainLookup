@@ -29,6 +29,7 @@ export async function checkDomainAvailability(domains: string[]): Promise<string
     }
 
     try {
+        console.log("Sending request to GoDaddy API with domains:", domains);
         const response = await fetch(GODADDY_API_URL, {
             method: 'POST',
             headers: {
@@ -40,6 +41,9 @@ export async function checkDomainAvailability(domains: string[]): Promise<string
         });
 
         const responseBody = await response.json() as any;
+        
+        console.log('GoDaddy API Raw Response Body:', JSON.stringify(responseBody, null, 2));
+
 
         if (!response.ok) {
             console.error(`GoDaddy API error: ${response.status} ${response.statusText}`, responseBody);

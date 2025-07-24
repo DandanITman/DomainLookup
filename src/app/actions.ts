@@ -12,33 +12,26 @@ interface FindDomainsResult {
 }
 
 export async function findAvailableDomains(description: string): Promise<FindDomainsResult> {
-    if (!description) {
-        return { success: false, error: 'Please provide a description for your application.', results: [] };
-    }
+    console.log("Starting findAvailableDomains function for debugging...");
 
     try {
-        const genResult = await generateDomainNames({ applicationDescription: description });
-        
-        let suggestions = genResult.domainNames
-            .map(name => name.toLowerCase().split('.')[0].replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, ''))
-            .filter(d => d && d.length > 2);
+        // HARDCODED FOR DEBUGGING
+        const suggestions = ['scooperific'];
+        const domainsToCkeck = suggestions.map(d => `${d}.com`);
+        console.log("Checking hardcoded domain:", domainsToCkeck);
 
-        // Add the test domain as requested
-        suggestions.push('checkmatedomains');
-        
-        const uniqueSuggestions = Array.from(new Set(suggestions));
-        
-        if (uniqueSuggestions.length === 0) {
-             return { success: true, results: [] };
-        }
 
-        const availableDomains = await checkDomainAvailability(uniqueSuggestions.map(d => `${d}.com`));
+        const availableDomains = await checkDomainAvailability(domainsToCkeck);
+        
+        console.log("Available domains returned from checkDomainAvailability:", availableDomains);
 
-        const results = uniqueSuggestions.map(suggestion => ({
+        const results = suggestions.map(suggestion => ({
             domain: suggestion,
             available: availableDomains.includes(`${suggestion}.com`),
         }));
         
+        console.log("Final results being sent to client:", results);
+
         return { 
             success: true, 
             results
