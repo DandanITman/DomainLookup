@@ -57,8 +57,13 @@ export async function findAvailableDomains(description: string): Promise<FindDom
 
     } catch (error) {
         console.error("Error finding available domains:", error);
-        if (error instanceof Error && error.message.includes('API key')) {
-            return { success: false, error: error.message };
+        if (error instanceof Error) {
+            if (error.message.includes('GODADDY_API_KEY')) {
+                 return { success: false, error: 'GoDaddy API Key is missing. Please set it in your .env file.' };
+            }
+            if (error.message.includes('GEMINI_API_KEY') || error.message.includes('GOOGLE_API_KEY')) {
+                 return { success: false, error: 'Gemini API Key is missing. Please set it in your .env file to generate domain ideas.' };
+            }
         }
         return { success: false, error: 'An unexpected error occurred while generating domains.' };
     }

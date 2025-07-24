@@ -39,6 +39,12 @@ export async function checkDomainAvailability(domain: string): Promise<boolean> 
             // GoDaddy API returns 422 for invalid domains, 429 for rate limits, etc.
             // We'll treat all non-200 responses as "unavailable" for simplicity.
             console.error(`GoDaddy API error for ${domain}: ${response.status} ${response.statusText}`);
+            const errorBody = await response.text();
+            console.error('Error Body:', errorBody);
+            // If we get a 401, it's an auth issue.
+            if (response.status === 401) {
+                throw new Error("GoDaddy authentication failed. Please check your GODADDY_API_KEY and GODADDY_API_SECRET.");
+            }
             return false;
         }
 
@@ -52,6 +58,9 @@ export async function checkDomainAvailability(domain: string): Promise<boolean> 
         return false;
 
     } catch (error) {
+        if (error instanceof Error && error.message.includes("GoDaddy authentication failed")) {
+            throw error;
+        }
         console.error(`Failed to check domain ${domain}:`, error);
         // If the API call fails for any reason, assume the domain is not available.
         return false;
