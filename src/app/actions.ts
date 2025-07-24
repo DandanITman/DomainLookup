@@ -7,14 +7,14 @@ import { checkDomainAvailability } from '@/services/domain-api';
 
 interface FindDomainsResult {
     success: boolean;
-    available?: string[];
-    unavailable?: string[];
+    available: string[];
+    unavailable: string[];
     error?: string;
 }
 
 export async function findAvailableDomains(description: string): Promise<FindDomainsResult> {
     if (!description) {
-        return { success: false, error: 'Please provide a description for your application.' };
+        return { success: false, error: 'Please provide a description for your application.', available: [], unavailable: [] };
     }
 
     try {
@@ -29,9 +29,8 @@ export async function findAvailableDomains(description: string): Promise<FindDom
             .filter(d => d && d.length > 2 && !processed.has(d));
 
         const uniqueSuggestions = Array.from(new Set(suggestions));
-
-        // Limit the number of checks to a reasonable amount per request.
-        const checks = uniqueSuggestions.slice(0, 50);
+        
+        const checks = uniqueSuggestions.slice(0, 10);
 
         for (const name of checks) {
             if (processed.has(name)) continue;
@@ -45,27 +44,26 @@ export async function findAvailableDomains(description: string): Promise<FindDom
                     unavailable.push(name);
                 }
             } catch (e) {
-                 // Even on error, add to unavailable to avoid re-checking
                  unavailable.push(name);
             }
         }
         
         return { 
             success: true, 
-            available: available.slice(0, 5), // Return up to 5 available
-            unavailable: unavailable.slice(0, 10) // Return up to 10 unavailable
+            available,
+            unavailable,
         };
 
     } catch (error) {
         console.error("Error finding available domains:", error);
         if (error instanceof Error) {
             if (error.message.includes('GODADDY_API_KEY')) {
-                 return { success: false, error: 'GoDaddy API Key is missing. Please set it in your .env file.' };
+                 return { success: false, error: 'GoDaddy API Key is missing. Please set it in your .env file.', available: [], unavailable: [] };
             }
             if (error.message.includes('GEMINI_API_KEY') || error.message.includes('GOOGLE_API_KEY')) {
-                 return { success: false, error: 'Gemini API Key is missing. Please set it in your .env file to generate domain ideas.' };
+                 return { success: false, error: 'Gemini API Key is missing. Please set it in your .env file to generate domain ideas.', available: [], unavailable: [] };
             }
         }
-        return { success: false, error: 'An unexpected error occurred while generating domains.' };
+        return { success: false, error: 'An unexpected error occurred while generating domains.', available: [], unavailable: [] };
     }
 }

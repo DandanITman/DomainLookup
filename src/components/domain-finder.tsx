@@ -1,30 +1,29 @@
 
 "use client";
 
-import React, { useState, useTransition, useEffect } from 'react';
+import React, { useState, useTransition, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { findAvailableDomains } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
-import { CheckCircle, Loader2, Search, Sparkles, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle, Loader2, Search, Sparkles, XCircle } from 'lucide-react';
 
-interface DomainResults {
-    available: string[];
-    unavailable: string[];
+interface DomainResult {
+    domain: string;
+    status: 'checking' | 'available' | 'unavailable';
 }
 
-function DomainListItem({ domain, status, onAnimationEnd }: { domain: string, status: 'unavailable' | 'available', onAnimationEnd?: () => void }) {
-    const animationDelay = Math.random() * 0.5;
+function DomainListItem({ domain, status }: { domain: string; status: 'checking' | 'available' | 'unavailable' }) {
     return (
-        <li
-            onAnimationEnd={onAnimationEnd}
-            className={`flex items-center justify-between p-3 rounded-lg transition-all duration-500 ease-out ${status === 'unavailable' ? 'animate-garbage-out' : 'animate-in fade-in'}`}
-            style={{ animationDelay: `${animationDelay}s` }}
-        >
+        <li className="flex items-center justify-between p-3 rounded-lg transition-all duration-300 animate-in fade-in">
             <div className="flex items-center gap-3">
-                {status === 'available' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-destructive" />}
-                <span className={`font-mono ${status === 'unavailable' ? 'line-through text-muted-foreground' : ''}`}>{domain}.com</span>
+                {status === 'checking' && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
+                {status === 'available' && <CheckCircle className="h-5 w-5 text-green-500" />}
+                {status === 'unavailable' && <XCircle className="h-5 w-5 text-destructive" />}
+                <span className={`font-mono ${status === 'unavailable' ? 'line-through text-muted-foreground' : ''}`}>
+                    {domain}.com
+                </span>
             </div>
         </li>
     );
@@ -47,32 +46,74 @@ function AvailableDomainCard({ domain, onSelect }: { domain: string, onSelect: (
     );
 }
 
+const MAX_ATTEMPTS = 5; // Try 5 batches of 10 (50 domains total)
+const REQUIRED_AVAILABLE = 5;
 
 export default function DomainFinder() {
     const [description, setDescription] = useState('');
-    const [results, setResults] = useState<DomainResults | null>(null);
+    const [results, setResults] = useState<DomainResult[]>([]);
     const [isPending, startTransition] = useTransition();
-    const [showAvailable, setShowAvailable] = useState(false);
     const { toast } = useToast();
+    const attempts = useRef(0);
+    const availableCount = useRef(0);
+    const stopSearching = useRef(false);
 
-    useEffect(() => {
-        if (results) {
-            const unavailableCount = results.unavailable.length;
-            if (unavailableCount === 0) {
-                setShowAvailable(true);
-                return;
+    const resetState = () => {
+        setResults([]);
+        attempts.current = 0;
+        availableCount.current = 0;
+        stopSearching.current = false;
+    };
+
+    const fetchAndCheckDomains = useCallback(async () => {
+        if (stopSearching.current || attempts.current >= MAX_ATTEMPTS) {
+            if (availableCount.current === 0) {
+                 toast({
+                    variant: 'destructive',
+                    title: 'No domains found',
+                    description: "We couldn't find any available domains. Try a different description.",
+                });
             }
-
-            const totalAnimationTime = 500 + unavailableCount * 100;
-            const timer = setTimeout(() => {
-                setShowAvailable(true);
-            }, totalAnimationTime);
-
-            return () => clearTimeout(timer);
-        } else {
-            setShowAvailable(false);
+            return;
         }
-    }, [results]);
+
+        attempts.current += 1;
+        
+        const res = await findAvailableDomains(description);
+
+        if (!res.success) {
+            toast({
+                variant: 'destructive',
+                title: 'Oh no!',
+                description: res.error,
+            });
+            stopSearching.current = true;
+            return;
+        }
+
+        // Add new domains with 'checking' status
+        const checkingDomains: DomainResult[] = res.available.concat(res.unavailable).map(d => ({ domain: d, status: 'checking' }));
+        setResults(prev => [...prev, ...checkingDomains]);
+        
+        // Simulate checking by revealing status one by one
+        for (const domain of res.unavailable) {
+            await new Promise(resolve => setTimeout(resolve, 150)); // stagger updates
+            setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: 'unavailable' } : r));
+        }
+        for (const domain of res.available) {
+            await new Promise(resolve => setTimeout(resolve, 150));
+            setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: 'available' } : r));
+            availableCount.current++;
+        }
+
+        if (availableCount.current < REQUIRED_AVAILABLE) {
+            fetchAndCheckDomains();
+        } else {
+            stopSearching.current = true;
+        }
+
+    }, [description, toast]);
+
 
     const handleSubmit = (e?: React.FormEvent<HTMLFormElement>) => {
         e?.preventDefault();
@@ -84,21 +125,10 @@ export default function DomainFinder() {
             });
             return;
         }
-        setResults(null);
-        setShowAvailable(false);
+        resetState();
 
-        startTransition(async () => {
-            const res = await findAvailableDomains(description);
-            if (res.success) {
-                setResults({ available: res.available!, unavailable: res.unavailable! });
-            } else {
-                setResults(null);
-                toast({
-                    variant: 'destructive',
-                    title: 'Oh no!',
-                    description: res.error,
-                });
-            }
+        startTransition(() => {
+            fetchAndCheckDomains();
         });
     };
 
@@ -108,7 +138,10 @@ export default function DomainFinder() {
             title: 'Copied!',
             description: `${domain}.com is now in your clipboard.`,
         });
-    }
+    };
+
+    const availableResults = results.filter(r => r.status === 'available');
+    const otherResults = results.filter(r => r.status !== 'available');
 
     return (
         <Card className="w-full shadow-2xl shadow-primary/10">
@@ -136,37 +169,44 @@ export default function DomainFinder() {
                     </Button>
                 </form>
 
-                {isPending && (
+                {isPending && results.length === 0 && (
                     <div className="text-center p-8 flex flex-col items-center gap-4">
                         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                        <p className="font-body text-muted-foreground">Searching the cosmos for your perfect domain...</p>
+                        <p className="font-body text-muted-foreground">Let's find your domain...</p>
                     </div>
                 )}
                 
-                {results && (
-                    <div className="mt-6">
-                        <div className="space-y-2">
-                            {!showAvailable && results.unavailable.map((domain, index) => (
-                                <DomainListItem key={domain} domain={domain} status="unavailable" />
-                            ))}
-                        </div>
-                        
-                        {showAvailable && (
-                            <div className="space-y-4">
-                               <h3 className="text-2xl font-headline text-center mb-4">Here are your available domains!</h3>
-                                {results.available.map(domain => (
-                                    <AvailableDomainCard key={domain} domain={domain} onSelect={handleCopyToClipboard} />
-                                ))}
+                {results.length > 0 && (
+                     <div className="mt-6 space-y-4">
+                        {availableResults.length > 0 && (
+                           <div>
+                                <h3 className="text-2xl font-headline text-center mb-4">Here are your available domains!</h3>
+                                <div className="space-y-3">
+                                    {availableResults.map(res => (
+                                        <AvailableDomainCard key={res.domain} domain={res.domain} onSelect={handleCopyToClipboard} />
+                                    ))}
+                                </div>
                             </div>
+                        )}
+                        
+                        {otherResults.length > 0 && (
+                            <div>
+                                <h3 className="text-lg font-headline text-center my-4">Search progress...</h3>
+                                <ul className="space-y-2 rounded-lg border p-2 max-h-60 overflow-y-auto">
+                                    {otherResults.map((res) => (
+                                        <DomainListItem key={res.domain} domain={res.domain} status={res.status} />
+                                    ))}
+                                 </ul>
+                             </div>
                         )}
                     </div>
                 )}
             </CardContent>
-            {results && showAvailable && (
+            {results.length > 0 && (
                 <CardFooter>
-                    <Button variant="outline" className="w-full" onClick={() => handleSubmit()} disabled={isPending}>
+                    <Button variant="outline" className="w-full" onClick={handleSubmit} disabled={isPending}>
                         {isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                        I don't like these, find more!
+                        {isPending ? 'Searching...' : 'I want different ones!'}
                     </Button>
                 </CardFooter>
             )}
