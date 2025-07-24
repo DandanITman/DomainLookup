@@ -22,30 +22,41 @@ export async function findAvailableDomains(description: string): Promise<FindDom
         const unavailable: string[] = [];
         const processed = new Set<string>();
         let attempts = 0;
+        const maxAttempts = 5; // Safety break after 5 GenAI calls (250 domains)
 
-        while (available.length < 5 && attempts < 3) { // Safety break after 3 GenAI calls
+        while (available.length < 5 && attempts < maxAttempts) {
             const result = await generateDomainNames({ applicationDescription: description });
             
-            const suggestions = result.domainNames.map(name => name.toLowerCase().split('.')[0].replace(/[^a-z0-9-]/g, '')).filter(d => d && !processed.has(d));
+            const suggestions = result.domainNames
+                .map(name => name.toLowerCase().split('.')[0].replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, ''))
+                .filter(d => d && d.length > 2 && !processed.has(d));
 
-            const availabilityChecks = suggestions.map(async (name) => {
-                if (processed.has(name)) return;
+            const uniqueSuggestions = Array.from(new Set(suggestions));
+
+            for (const name of uniqueSuggestions) {
+                if (processed.has(name)) continue;
                 processed.add(name);
+
+                // Stop checking if we already have enough available domains
+                if (available.length >= 5) break;
 
                 try {
                     const isAvailable = await checkDomainAvailability(name + '.com');
                     if (isAvailable) {
-                        if(available.length < 5) available.push(name);
+                        available.push(name);
                     } else {
-                        if (unavailable.length < 10) unavailable.push(name);
+                        if (unavailable.length < 10) {
+                            unavailable.push(name);
+                        }
                     }
                 } catch (e) {
-                     if (unavailable.length < 10) unavailable.push(name);
+                     // Even on error, add to unavailable to avoid re-checking
+                     if (unavailable.length < 10) {
+                        unavailable.push(name);
+                    }
                 }
-            });
-
-            await Promise.all(availabilityChecks);
-
+            }
+            
             attempts++;
         }
 
