@@ -44,6 +44,12 @@ export async function findAvailableDomains(description: string): Promise<FindDom
             .filter(d => d && d.length > 2);
 
         const uniqueSuggestions = Array.from(new Set(suggestions));
+        
+        // Add the test domain
+        if (!uniqueSuggestions.includes('checkmatedomains')) {
+            uniqueSuggestions.push('checkmatedomains');
+        }
+
         const shuffledSuggestions = shuffle(uniqueSuggestions);
         
         const domainsToCheck = shuffledSuggestions.slice(0, 10);
@@ -52,26 +58,12 @@ export async function findAvailableDomains(description: string): Promise<FindDom
             return { success: true, available: [], unavailable: [] };
         }
         
-        const available: string[] = [];
-        const unavailable: string[] = [];
-
-        for (const name of domainsToCheck) {
-            try {
-                const isAvailable = await checkDomainAvailability(name + '.com');
-                if (isAvailable) {
-                    available.push(name);
-                } else {
-                    unavailable.push(name);
-                }
-            } catch (e) {
-                 unavailable.push(name);
-            }
-        }
+        const { available, unavailable } = await checkDomainAvailability(domainsToCheck.map(d => `${d}.com`));
         
         return { 
             success: true, 
-            available,
-            unavailable,
+            available: available.map(d => d.replace('.com', '')),
+            unavailable: unavailable.map(d => d.replace('.com', '')),
         };
 
     } catch (error) {

@@ -46,7 +46,7 @@ function AvailableDomainCard({ domain, onSelect }: { domain: string, onSelect: (
     );
 }
 
-const MAX_ATTEMPTS = 15;
+const MAX_ATTEMPTS = 5; // 5 attempts * 10 domains/attempt = 50 domains
 const REQUIRED_AVAILABLE = 5;
 
 export default function DomainFinder() {
@@ -73,7 +73,7 @@ export default function DomainFinder() {
                  toast({
                     variant: 'destructive',
                     title: 'Search complete',
-                    description: "We couldn't find any available domains in the first 150 results. Try a more specific description or run the search again.",
+                    description: "We couldn't find any available domains in the first 50 results. Try a more specific description or run the search again.",
                 });
             }
             stopSearching.current = true;
@@ -112,27 +112,34 @@ export default function DomainFinder() {
 
         // Add new domains to be checked
         setResults(prev => {
+            const existingDomains = new Set(prev.map(r => r.domain));
             const newResults = [...prev];
             checkingDomains.forEach(cd => {
-                if (!newResults.some(r => r.domain === cd.domain)) {
+                if (!existingDomains.has(cd.domain)) {
                     newResults.push(cd);
                 }
             });
             return newResults;
         });
         
-        const domainsToCheck = (res.available || []).concat(res.unavailable || []);
+        // Wait a moment before showing results to give a sense of "checking"
+        await new Promise(resolve => setTimeout(resolve, 300));
 
-        for (const domain of domainsToCheck) {
-             if (stopSearching.current) return;
-             const isAvailable = (res.available || []).includes(domain);
-             await new Promise(resolve => setTimeout(resolve, 150));
-             setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: isAvailable ? 'available' : 'unavailable' } : r));
-             if (isAvailable) {
+        // Update available
+        if (res.available) {
+            res.available.forEach(domain => {
+                if (stopSearching.current) return;
+                setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: 'available' } : r));
                 availableCount.current++;
-             }
+            });
         }
-
+        // Update unavailable
+        if (res.unavailable) {
+            res.unavailable.forEach(domain => {
+                if (stopSearching.current) return;
+                setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: 'unavailable' } : r));
+            });
+        }
 
         if (availableCount.current < REQUIRED_AVAILABLE) {
             fetchAndCheckDomains();
