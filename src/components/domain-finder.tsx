@@ -46,7 +46,7 @@ function AvailableDomainCard({ domain, onSelect }: { domain: string, onSelect: (
     );
 }
 
-const MAX_ATTEMPTS = 15; // Try 15 batches of 10 (150 domains total)
+const MAX_ATTEMPTS = 15;
 const REQUIRED_AVAILABLE = 5;
 
 export default function DomainFinder() {
@@ -57,12 +57,14 @@ export default function DomainFinder() {
     const attempts = useRef(0);
     const availableCount = useRef(0);
     const stopSearching = useRef(false);
+    const processedDomains = useRef(new Set<string>());
 
     const resetState = () => {
         setResults([]);
         attempts.current = 0;
         availableCount.current = 0;
         stopSearching.current = false;
+        processedDomains.current.clear();
     };
 
     const fetchAndCheckDomains = useCallback(async () => {
@@ -94,21 +96,28 @@ export default function DomainFinder() {
             return;
         }
         
-        const checkingDomains: DomainResult[] = res.available.concat(res.unavailable).map(d => ({ domain: d, status: 'checking' }));
+        const allNewDomains = res.available.concat(res.unavailable);
+        const uniqueNewDomains = allNewDomains.filter(d => !processedDomains.current.has(d));
+        
+        const checkingDomains: DomainResult[] = uniqueNewDomains.map(d => {
+            processedDomains.current.add(d);
+            return { domain: d, status: 'checking' };
+        });
+
         setResults(prev => [...prev, ...checkingDomains]);
         
-        
-        for (const domain of res.unavailable) {
-            if (stopSearching.current) return;
-            await new Promise(resolve => setTimeout(resolve, 150)); 
-            setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: 'unavailable' } : r));
-        }
-        for (const domain of res.available) {
+        const domainsToCheck = res.available.concat(res.unavailable);
+
+        for (const domain of domainsToCheck) {
              if (stopSearching.current) return;
-            await new Promise(resolve => setTimeout(resolve, 150));
-            setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: 'available' } : r));
-            availableCount.current++;
+             const isAvailable = res.available.includes(domain);
+             await new Promise(resolve => setTimeout(resolve, 150));
+             setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: isAvailable ? 'available' : 'unavailable' } : r));
+             if (isAvailable) {
+                availableCount.current++;
+             }
         }
+
 
         if (availableCount.current < REQUIRED_AVAILABLE) {
             fetchAndCheckDomains();
