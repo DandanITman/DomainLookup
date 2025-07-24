@@ -23,7 +23,7 @@ export async function findAvailableDomains(description: string): Promise<FindDom
         const processed = new Set<string>();
         let attempts = 0;
 
-        while (available.length < 5 && attempts < 5) { // Safety break after 5 GenAI calls
+        while (available.length < 5 && attempts < 3) { // Safety break after 3 GenAI calls
             const result = await generateDomainNames({ applicationDescription: description });
             
             const suggestions = result.domainNames.map(name => name.toLowerCase().split('.')[0].replace(/[^a-z0-9-]/g, '')).filter(d => d && !processed.has(d));
@@ -49,7 +49,7 @@ export async function findAvailableDomains(description: string): Promise<FindDom
             attempts++;
         }
 
-        if (available.length === 0 && attempts >= 5) {
+        if (available.length === 0) {
              return { success: false, error: "We couldn't find any available domains after several attempts. Please try a more detailed description or try again later." };
         }
 
