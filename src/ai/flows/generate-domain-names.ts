@@ -36,9 +36,9 @@ const prompt = ai.definePrompt({
   output: {schema: GenerateDomainNamesOutputSchema},
   prompt: `You are a domain name expert specializing in generating creative, modern, and relevant domain names based on application descriptions.
 
-  Your goal is to find names that are clever, memorable, and likely to be available. Think outside the box. Combine words, use clever puns, or create new words.
+  Your goal is to find names that are clever, memorable, and likely to be available. Think outside the box. Combine words, use clever puns, or create new words. Avoid generic or already-taken names. Be highly creative.
 
-  Generate twenty (20) domain names for the application described below. IMPORTANT: Only return the name, do not include any TLD like .com, .app, .io, etc.
+  Generate fifty (50) domain names for the application described below. IMPORTANT: Only return the name, do not include any TLD like .com, .app, .io, etc.
 
   Application Description: {{{applicationDescription}}}
 
