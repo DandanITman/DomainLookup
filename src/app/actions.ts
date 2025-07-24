@@ -3,8 +3,6 @@
 
 import { generateDomainNames } from '@/ai/flows/generate-domain-names';
 import { checkDomainAvailability } from '@/services/domain-api';
-import {-shuffle} from 'lodash';
-
 
 interface FindDomainsResult {
     success: boolean;
