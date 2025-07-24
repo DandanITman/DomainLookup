@@ -49,11 +49,11 @@ export async function findAvailableDomains(description: string): Promise<FindDom
             attempts++;
         }
 
-        if (available.length < 5) {
-             return { success: false, error: "We couldn't find 5 available domains. Try a more detailed description!" };
+        if (available.length === 0 && attempts >= 5) {
+             return { success: false, error: "We couldn't find any available domains after several attempts. Please try a more detailed description or try again later." };
         }
 
-        return { success: true, available, unavailable };
+        return { success: true, available, unavailable: unavailable.slice(0, 10 - available.length) };
 
     } catch (error) {
         console.error("Error finding available domains:", error);
