@@ -3,6 +3,7 @@
 
 import { generateDomainNames } from '@/ai/flows/generate-domain-names';
 import { checkDomainAvailability } from '@/services/domain-api';
+import {-shuffle} from 'lodash';
 
 
 interface FindDomainsResult {
@@ -20,13 +21,12 @@ export async function findAvailableDomains(description: string): Promise<FindDom
         }
 
         const uniqueSuggestions = [...new Set(domainNames.map(d => d.toLowerCase().replace(/[^a-z0-9-]/g, '')))];
-        const domainsToCheck = uniqueSuggestions.map(d => `${d}.com`);
         
-        const availableDomains = await checkDomainAvailability(domainsToCheck);
+        const availableDomains = await checkDomainAvailability(uniqueSuggestions);
         
         const results = uniqueSuggestions.map(suggestion => ({
             domain: suggestion,
-            available: availableDomains.includes(`${suggestion}.com`),
+            available: availableDomains.includes(suggestion),
         }));
         
         return { 
@@ -37,8 +37,8 @@ export async function findAvailableDomains(description: string): Promise<FindDom
     } catch (error) {
         console.error("Error finding available domains:", error);
         if (error instanceof Error) {
-            if (error.message.includes('GODADDY_API_KEY') || error.message.includes('DOMAINR_API_KEY')) {
-                 return { success: false, error: 'The domain registrar API Key is missing. Please set it in your .env file.', results: [] };
+            if (error.message.includes('NAMECHEAP_API_KEY')) {
+                 return { success: false, error: 'The Namecheap API Key is missing. Please set it in your .env file.', results: [] };
             }
             if (error.message.includes('GEMINI_API_KEY') || error.message.includes('GOOGLE_API_KEY')) {
                  return { success: false, error: 'Gemini API Key is missing. Please set it in your .env file to generate domain ideas.', results: [] };
