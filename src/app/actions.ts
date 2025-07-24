@@ -37,25 +37,25 @@ export async function findAvailableDomains(description: string): Promise<FindDom
     }
 
     try {
-        const available: string[] = [];
-        const unavailable: string[] = [];
-        const processed = new Set<string>();
-
         const result = await generateDomainNames({ applicationDescription: description });
         
         const suggestions = result.domainNames
             .map(name => name.toLowerCase().split('.')[0].replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, ''))
-            .filter(d => d && d.length > 2 && !processed.has(d));
+            .filter(d => d && d.length > 2);
 
         const uniqueSuggestions = Array.from(new Set(suggestions));
         const shuffledSuggestions = shuffle(uniqueSuggestions);
         
-        const checks = shuffledSuggestions.slice(0, 10);
+        const domainsToCheck = shuffledSuggestions.slice(0, 10);
 
-        for (const name of checks) {
-            if (processed.has(name)) continue;
-            processed.add(name);
+        if (domainsToCheck.length === 0) {
+            return { success: true, available: [], unavailable: [] };
+        }
+        
+        const available: string[] = [];
+        const unavailable: string[] = [];
 
+        for (const name of domainsToCheck) {
             try {
                 const isAvailable = await checkDomainAvailability(name + '.com');
                 if (isAvailable) {

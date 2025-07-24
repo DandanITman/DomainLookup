@@ -69,11 +69,11 @@ export default function DomainFinder() {
 
     const fetchAndCheckDomains = useCallback(async () => {
         if (stopSearching.current || attempts.current >= MAX_ATTEMPTS) {
-            if (availableCount.current === 0) {
+            if (availableCount.current === 0 && !stopSearching.current) {
                  toast({
                     variant: 'destructive',
                     title: 'Search complete',
-                    description: "Couldn't find available domains in the first 150 results. Try a more specific description or run the search again.",
+                    description: "We couldn't find any available domains in the first 150 results. Try a more specific description or run the search again.",
                 });
             }
             stopSearching.current = true;
@@ -95,8 +95,14 @@ export default function DomainFinder() {
             stopSearching.current = true;
             return;
         }
+
+        if (!res.available && !res.unavailable) {
+            console.error("API returned success but no domain lists.");
+            fetchAndCheckDomains(); // Try again
+            return;
+        }
         
-        const allNewDomains = res.available.concat(res.unavailable);
+        const allNewDomains = (res.available || []).concat(res.unavailable || []);
         const uniqueNewDomains = allNewDomains.filter(d => !processedDomains.current.has(d));
         
         const checkingDomains: DomainResult[] = uniqueNewDomains.map(d => {
@@ -104,13 +110,22 @@ export default function DomainFinder() {
             return { domain: d, status: 'checking' };
         });
 
-        setResults(prev => [...prev, ...checkingDomains]);
+        // Add new domains to be checked
+        setResults(prev => {
+            const newResults = [...prev];
+            checkingDomains.forEach(cd => {
+                if (!newResults.some(r => r.domain === cd.domain)) {
+                    newResults.push(cd);
+                }
+            });
+            return newResults;
+        });
         
-        const domainsToCheck = res.available.concat(res.unavailable);
+        const domainsToCheck = (res.available || []).concat(res.unavailable || []);
 
         for (const domain of domainsToCheck) {
              if (stopSearching.current) return;
-             const isAvailable = res.available.includes(domain);
+             const isAvailable = (res.available || []).includes(domain);
              await new Promise(resolve => setTimeout(resolve, 150));
              setResults(prev => prev.map(r => r.domain === domain ? { ...r, status: isAvailable ? 'available' : 'unavailable' } : r));
              if (isAvailable) {
