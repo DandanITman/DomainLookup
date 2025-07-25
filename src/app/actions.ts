@@ -20,23 +20,23 @@ export async function findAvailableDomains(description: string): Promise<FindDom
 
         const uniqueSuggestions = [...new Set(domainNames.map(d => d.toLowerCase().replace(/[^a-z0-9-]/g, '')))];
         
-        const availableDomains = await checkDomainAvailability(uniqueSuggestions);
-        
-        const results = uniqueSuggestions.map(suggestion => ({
-            domain: suggestion,
-            available: availableDomains.includes(suggestion),
-        }));
+        const availabilityChecks = await Promise.all(
+            uniqueSuggestions.map(async (domain) => {
+                const isAvailable = await checkDomainAvailability(domain);
+                return { domain, available: isAvailable };
+            })
+        );
         
         return { 
             success: true, 
-            results
+            results: availabilityChecks
         };
 
     } catch (error) {
         console.error("Error finding available domains:", error);
         if (error instanceof Error) {
-            if (error.message.includes('NAMECHEAP_API_KEY')) {
-                 return { success: false, error: 'The Namecheap API Key is missing. Please set it in your .env file.', results: [] };
+            if (error.message.includes('NAMECHEAP_API_KEY') || error.message.includes('Namecheap API credentials')) {
+                 return { success: false, error: 'The Namecheap API Key, User, or Client IP is missing. Please set them in your .env file.', results: [] };
             }
             if (error.message.includes('GEMINI_API_KEY') || error.message.includes('GOOGLE_API_KEY')) {
                  return { success: false, error: 'Gemini API Key is missing. Please set it in your .env file to generate domain ideas.', results: [] };
