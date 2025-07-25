@@ -1,63 +1,62 @@
-
 'use server';
 
 import fetch from 'node-fetch';
-import { XMLParser } from 'fast-xml-parser';
 
-const NAMECHEAP_API_URL = 'https://api.namecheap.com/xml.response';
+const GODADDY_API_URL = 'https://api.godaddy.com/v1/domains/available';
 
 /**
- * Checks a single domain for availability using the Namecheap API.
+ * Checks a list of domains for availability using the GoDaddy API.
  *
- * @param domain The domain name to check (e.g., "example"). Do not include the TLD.
- * @returns A promise that resolves to a boolean indicating availability.
+ * @param domains An array of domain names to check (e.g., ["example", "another"]). Do not include the TLD.
+ * @returns A promise that resolves to an array of available domain names.
  */
-export async function checkDomainAvailability(domain: string): Promise<boolean> {
-    const apiKey = process.env.NAMECHEAP_API_KEY;
-    const apiUser = process.env.NAMECHEAP_API_USER;
-    const clientIp = process.env.NAMECHEAP_CLIENT_IP;
-    const userName = apiUser;
+export async function checkDomainAvailability(domains: string[]): Promise<string[]> {
+    const apiKey = process.env.GODADDY_API_KEY;
+    const apiSecret = process.env.GODADDY_API_SECRET;
 
-    if (!apiKey || !apiUser || !clientIp) {
-        throw new Error("Namecheap API credentials are not configured. Please set NAMECHEAP_API_USER, NAMECHEAP_API_KEY, and NAMECHEAP_CLIENT_IP in your .env file.");
+    if (!apiKey || !apiSecret) {
+        throw new Error("GoDaddy API credentials are not configured. Please set GODADDY_API_KEY and GODADDY_API_SECRET in your .env file.");
     }
+    
+    // GoDaddy API expects the TLD, so we add .com to each domain
+    const domainsWithTld = domains.map(d => `${d}.com`);
 
     try {
-        const url = `${NAMECHEAP_API_URL}?ApiUser=${apiUser}&ApiKey=${apiKey}&UserName=${userName}&Command=namecheap.domains.check&ClientIp=${clientIp}&DomainList=${domain}.com`;
-        
-        const response = await fetch(url);
-        const xmlText = await response.text();
+        const response = await fetch(GODADDY_API_URL, {
+            method: 'POST',
+            headers: {
+                'Authorization': `sso-key ${apiKey}:${apiSecret}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(domainsWithTld),
+        });
 
+        const json = await response.json();
+        
         if (!response.ok) {
-            console.error(`Namecheap API HTTP error for domain ${domain}: ${response.status} ${response.statusText}`, xmlText);
-            throw new Error(`Error from Namecheap API: HTTP ${response.status}`);
+             console.error(`GoDaddy API HTTP error: ${response.status}`, json);
+             const errorMessage = json.message || `HTTP ${response.status}`;
+             throw new Error(`Error from GoDaddy API: ${errorMessage}`);
         }
         
-        const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix : "@_" });
-        const jsonObj = parser.parse(xmlText);
-
-        const apiResponse = jsonObj?.ApiResponse;
-        if (apiResponse?.['@_Status'] === 'ERROR') {
-            const error = apiResponse?.Errors?.Error;
-            const errorMessage = Array.isArray(error) ? error.map(e => e['#text']).join(', ') : error['#text'];
-            console.error(`Namecheap API returned an error for domain ${domain}:`, errorMessage);
-            throw new Error(`Error from Namecheap API: ${errorMessage}`);
-        }
-        
-        const result = apiResponse?.CommandResponse?.DomainCheckResult;
-        if (!result) {
-             console.error(`Could not parse Namecheap response for domain ${domain}`, jsonObj);
-             throw new Error(`Could not parse Namecheap response for domain ${domain}`);
+        if (!json.domains || !Array.isArray(json.domains)) {
+            console.error('GoDaddy API returned an unexpected response format:', json);
+            throw new Error('Could not parse GoDaddy response.');
         }
 
-        return result['@_Available'] === 'true';
+        // Filter for domains that are available and return just their names without the .com
+        const availableDomains = json.domains
+            .filter((d: any) => d.available === true)
+            .map((d: any) => d.domain.replace('.com', ''));
+            
+        return availableDomains;
 
     } catch (error) {
-        console.error(`Failed to check domain ${domain} with Namecheap:`, error);
-        // Re-throw the error to be handled by the caller
+        console.error('Failed to check domains with GoDaddy:', error);
         if (error instanceof Error) {
             throw error;
         }
-        throw new Error(`An unknown error occurred during check for ${domain}.`);
+        throw new Error('An unknown error occurred during the domain check with GoDaddy.');
     }
 }
