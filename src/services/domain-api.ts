@@ -7,12 +7,12 @@ import { XMLParser } from 'fast-xml-parser';
 const NAMECHEAP_API_URL = 'https://api.namecheap.com/xml.response';
 
 /**
- * Checks a list of domains for availability using the Namecheap API.
+ * Checks a single domain for availability using the Namecheap API.
  *
- * @param domains An array of domain names to check (e.g., ["example", "test"]). Do not include the TLD.
- * @returns A promise that resolves to an object mapping each domain to its availability status (boolean).
+ * @param domain The domain name to check (e.g., "example"). Do not include the TLD.
+ * @returns A promise that resolves to a boolean indicating availability.
  */
-export async function checkDomainAvailability(domains: string[]): Promise<Record<string, boolean>> {
+export async function checkDomainAvailability(domain: string): Promise<boolean> {
     const apiKey = process.env.NAMECHEAP_API_KEY;
     const apiUser = process.env.NAMECHEAP_API_USER;
     const clientIp = process.env.NAMECHEAP_CLIENT_IP;
@@ -21,20 +21,15 @@ export async function checkDomainAvailability(domains: string[]): Promise<Record
     if (!apiKey || !apiUser || !clientIp) {
         throw new Error("Namecheap API credentials are not configured. Please set NAMECHEAP_API_USER, NAMECHEAP_API_KEY, and NAMECHEAP_CLIENT_IP in your .env file.");
     }
-    
-    if (!domains || domains.length === 0) {
-        return {};
-    }
 
     try {
-        const domainList = domains.map(d => `${d}.com`).join(',');
-        const url = `${NAMECHEAP_API_URL}?ApiUser=${apiUser}&ApiKey=${apiKey}&UserName=${userName}&Command=namecheap.domains.check&ClientIp=${clientIp}&DomainList=${domainList}`;
+        const url = `${NAMECHEAP_API_URL}?ApiUser=${apiUser}&ApiKey=${apiKey}&UserName=${userName}&Command=namecheap.domains.check&ClientIp=${clientIp}&DomainList=${domain}.com`;
         
         const response = await fetch(url);
         const xmlText = await response.text();
 
         if (!response.ok) {
-            console.error(`Namecheap API HTTP error: ${response.status} ${response.statusText}`, xmlText);
+            console.error(`Namecheap API HTTP error for domain ${domain}: ${response.status} ${response.statusText}`, xmlText);
             throw new Error(`Error from Namecheap API: HTTP ${response.status}`);
         }
         
@@ -45,32 +40,24 @@ export async function checkDomainAvailability(domains: string[]): Promise<Record
         if (apiResponse?.['@_Status'] === 'ERROR') {
             const error = apiResponse?.Errors?.Error;
             const errorMessage = Array.isArray(error) ? error.map(e => e['#text']).join(', ') : error['#text'];
-            console.error(`Namecheap API returned an error:`, errorMessage);
+            console.error(`Namecheap API returned an error for domain ${domain}:`, errorMessage);
             throw new Error(`Error from Namecheap API: ${errorMessage}`);
         }
         
-        const results = apiResponse?.CommandResponse?.DomainCheckResult;
-
-        if (!results) {
-             console.error(`Could not parse Namecheap response`, jsonObj);
-             return {};
+        const result = apiResponse?.CommandResponse?.DomainCheckResult;
+        if (!result) {
+             console.error(`Could not parse Namecheap response for domain ${domain}`, jsonObj);
+             throw new Error(`Could not parse Namecheap response for domain ${domain}`);
         }
 
-        const availability: Record<string, boolean> = {};
-        const resultsArray = Array.isArray(results) ? results : [results];
-
-        for (const result of resultsArray) {
-            const domainName = result['@_Domain'].replace('.com', '');
-            availability[domainName] = result['@_Available'] === 'true';
-        }
-        
-        return availability;
+        return result['@_Available'] === 'true';
 
     } catch (error) {
-        console.error(`Failed to check domains with Namecheap:`, error);
+        console.error(`Failed to check domain ${domain} with Namecheap:`, error);
+        // Re-throw the error to be handled by the caller
         if (error instanceof Error) {
             throw error;
         }
-        throw new Error('An unknown error occurred during domain check.');
+        throw new Error(`An unknown error occurred during check for ${domain}.`);
     }
 }
