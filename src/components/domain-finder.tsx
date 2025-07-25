@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useTransition, useCallback } from 'react';
+import React, { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -50,7 +50,7 @@ export default function DomainFinder() {
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
     
-    const handleSearch = useCallback((isNewSearch: boolean) => {
+    const handleSearch = () => {
         if (!description) {
             toast({
                 variant: 'destructive',
@@ -60,9 +60,7 @@ export default function DomainFinder() {
             return;
         }
 
-        if (isNewSearch) {
-            setResults([]);
-        }
+        setResults([]);
 
         startTransition(async () => {
             const res = await findAvailableDomains(description);
@@ -76,26 +74,21 @@ export default function DomainFinder() {
                 return;
             }
             
-            const uniqueNewResults = res.results.filter(newResult => 
-                !results.some(existingResult => existingResult.domain === newResult.domain)
-            );
+            setResults(res.results);
 
-            setResults(prevResults => [...prevResults, ...uniqueNewResults]);
-
-            const availableCount = uniqueNewResults.filter(r => r.available).length;
-            if (uniqueNewResults.length > 0 && availableCount === 0 && isNewSearch) {
+            const availableCount = res.results.filter(r => r.available).length;
+            if (res.results.length > 0 && availableCount === 0) {
                  toast({
-                    variant: 'destructive',
-                    title: 'No luck in this batch',
-                    description: "We couldn't find any available domains. Try searching for more or generating new ideas.",
+                    title: 'No domains available',
+                    description: "We couldn't find any available domains in this batch. Try generating new ideas.",
                 });
             }
         });
-    }, [description, toast, results]);
+    };
 
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        handleSearch(true);
+        handleSearch();
     };
 
     const handleCopyToClipboard = (domain: string) => {
@@ -135,14 +128,14 @@ export default function DomainFinder() {
                     </Button>
                 </form>
 
-                {isPending && results.length === 0 && (
+                {isPending && (
                     <div className="text-center p-8 flex flex-col items-center gap-4">
                         <Loader2 className="h-12 w-12 animate-spin text-primary" />
                         <p className="font-body text-muted-foreground">Let's find your domain...</p>
                     </div>
                 )}
                 
-                {results.length > 0 && (
+                {!isPending && results.length > 0 && (
                      <div className="mt-6 space-y-4">
                         {availableResults.length > 0 && (
                            <div>
@@ -168,14 +161,6 @@ export default function DomainFinder() {
                     </div>
                 )}
             </CardContent>
-            {results.length > 0 && !isPending && (
-                <CardFooter className="flex-col gap-2">
-                    <Button variant="outline" className="w-full" onClick={() => handleSearch(false)} disabled={isPending}>
-                        {isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                        {isPending ? 'Searching...' : 'Search More'}
-                    </Button>
-                </CardFooter>
-            )}
         </Card>
     );
 }

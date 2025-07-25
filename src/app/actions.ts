@@ -20,16 +20,16 @@ export async function findAvailableDomains(description: string): Promise<FindDom
 
         const uniqueSuggestions = [...new Set(domainNames.map(d => d.toLowerCase().replace(/[^a-z0-9-]/g, '')))];
         
-        const availabilityChecks = await Promise.all(
-            uniqueSuggestions.map(async (domain) => {
-                const isAvailable = await checkDomainAvailability(domain);
-                return { domain, available: isAvailable };
-            })
-        );
+        const availabilityResults = await checkDomainAvailability(uniqueSuggestions);
+        
+        const results = uniqueSuggestions.map(domain => ({
+            domain,
+            available: availabilityResults[domain] || false
+        }));
         
         return { 
             success: true, 
-            results: availabilityChecks
+            results
         };
 
     } catch (error) {
