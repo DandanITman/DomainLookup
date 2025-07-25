@@ -41,6 +41,9 @@ export async function findAvailableDomains(description: string): Promise<FindDom
             if (error.message.includes('GEMINI_API_KEY') || error.message.includes('GOOGLE_API_KEY')) {
                  return { success: false, error: 'Gemini API Key is missing. Please set it in your .env file to generate domain ideas.', results: [] };
             }
+             if (error.message.includes('Error from Namecheap API')) {
+                return { success: false, error: error.message, results: [] };
+            }
         }
         return { success: false, error: 'An unexpected error occurred while generating domains.', results: [] };
     }

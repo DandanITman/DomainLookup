@@ -168,7 +168,7 @@ export default function DomainFinder() {
                     </div>
                 )}
             </CardContent>
-            {results.length > 0 && (
+            {results.length > 0 && !isPending && (
                 <CardFooter className="flex-col gap-2">
                     <Button variant="outline" className="w-full" onClick={() => handleSearch(false)} disabled={isPending}>
                         {isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}

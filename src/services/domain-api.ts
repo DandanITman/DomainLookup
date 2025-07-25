@@ -1,3 +1,4 @@
+
 'use server';
 
 import fetch from 'node-fetch';
@@ -15,9 +16,9 @@ export async function checkDomainAvailability(domain: string): Promise<boolean> 
     const apiKey = process.env.NAMECHEAP_API_KEY;
     const apiUser = process.env.NAMECHEAP_API_USER;
     const clientIp = process.env.NAMECHEAP_CLIENT_IP;
-    const userName = process.env.NAMECHEAP_API_USER;
+    const userName = apiUser; // Namecheap uses the same value for ApiUser and UserName
 
-    if (!apiKey || !apiUser || !clientIp || !userName) {
+    if (!apiKey || !apiUser || !clientIp) {
         throw new Error("Namecheap API credentials are not configured. Please set NAMECHEAP_API_USER, NAMECHEAP_API_KEY, and NAMECHEAP_CLIENT_IP in your .env file.");
     }
     
@@ -33,14 +34,22 @@ export async function checkDomainAvailability(domain: string): Promise<boolean> 
         const xmlText = await response.text();
 
         if (!response.ok) {
-            console.error(`Namecheap API error for ${domainToCheck}: ${response.status} ${response.statusText}`, xmlText);
-            return false;
+            console.error(`Namecheap API HTTP error for ${domainToCheck}: ${response.status} ${response.statusText}`, xmlText);
+            throw new Error(`Error from Namecheap API: HTTP ${response.status}`);
         }
         
         const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix : "@_" });
         const jsonObj = parser.parse(xmlText);
+
+        const apiResponse = jsonObj?.ApiResponse;
+        if (apiResponse?.['@_Status'] === 'ERROR') {
+            const error = apiResponse?.Errors?.Error;
+            const errorMessage = Array.isArray(error) ? error[0]['#text'] : error['#text'];
+            console.error(`Namecheap API returned an error for ${domainToCheck}:`, errorMessage);
+            throw new Error(`Error from Namecheap API: ${errorMessage}`);
+        }
         
-        const result = jsonObj?.ApiResponse?.CommandResponse?.DomainCheckResult;
+        const result = apiResponse?.CommandResponse?.DomainCheckResult;
 
         if (!result) {
              console.error(`Could not parse Namecheap response for ${domainToCheck}`, jsonObj);
@@ -51,6 +60,10 @@ export async function checkDomainAvailability(domain: string): Promise<boolean> 
 
     } catch (error) {
         console.error(`Failed to check domain ${domain}.com with Namecheap:`, error);
-        return false;
+        // Re-throw the error so it can be caught by the action
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error('An unknown error occurred during domain check.');
     }
 }
