@@ -1,6 +1,7 @@
 'use server';
 
 import fetch from 'node-fetch';
+import { TLD } from '@/lib/constants';
 
 const GODADDY_API_URL = 'https://api.ote-godaddy.com/v1/domains/available';
 
@@ -17,9 +18,10 @@ interface GoDaddyAvailabilityResponse {
  * Checks a list of domains for availability using the GoDaddy API.
  *
  * @param domains An array of domain names to check (e.g., ["example", "another"]). Do not include the TLD.
+ * @param tld The top-level domain to check (e.g., 'com', 'ai', 'org')
  * @returns A promise that resolves to an array of available domain names.
  */
-export async function checkDomainAvailability(domains: string[]): Promise<string[]> {
+export async function checkDomainAvailability(domains: string[], tld: TLD = 'com'): Promise<string[]> {
     const apiKey = process.env.GODADDY_API_KEY;
     const apiSecret = process.env.GODADDY_API_SECRET;
 
@@ -27,8 +29,8 @@ export async function checkDomainAvailability(domains: string[]): Promise<string
         throw new Error("GoDaddy API credentials are not configured. Please set GODADDY_API_KEY and GODADDY_API_SECRET in your .env file.");
     }
     
-    // GoDaddy API expects the TLD, so we add .com to each domain
-    const domainsWithTld = domains.map(d => `${d}.com`);
+    // Add the TLD to each domain
+    const domainsWithTld = domains.map(d => `${d}.${tld}`);
 
     try {
         // Check domains one by one since the bulk endpoint is having issues
@@ -59,7 +61,8 @@ export async function checkDomainAvailability(domains: string[]): Promise<string
                 }
                 
                 if (json.available === true) {
-                    availableDomains.push(domain.replace('.com', ''));
+                    // Remove the TLD when adding to available domains
+                    availableDomains.push(domain.replace(`.${tld}`, ''));
                 }
             } catch (error) {
                 console.error(`Error checking domain ${domain}:`, error);

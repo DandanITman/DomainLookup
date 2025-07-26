@@ -8,44 +8,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { findAvailableDomains } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle, Loader2, Search, Sparkles, XCircle } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { POPULAR_TLDS, TLD } from '@/lib/constants';
 
 interface DomainResult {
     domain: string;
     available: boolean;
 }
 
-function DomainListItem({ domain, available }: { domain: string; available: boolean }) {
-    return (
-        <li className="flex items-center justify-between p-3 rounded-lg transition-all duration-300 animate-in fade-in">
-            <div className="flex items-center gap-3">
-                {available ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-destructive" />}
-                <span className={`font-mono ${!available ? 'line-through text-muted-foreground' : ''}`}>
-                    {domain}.com
-                </span>
-            </div>
-        </li>
-    );
-}
-
-function AvailableDomainCard({ domain, onSelect }: { domain: string, onSelect: (domain: string) => void }) {
-    const animationDelay = Math.random() * 0.3;
-    return (
-        <div 
-            className="p-4 border rounded-lg bg-card hover:border-primary transition-all duration-300 cursor-pointer animate-in fade-in slide-in-from-bottom-5"
-            onClick={() => onSelect(domain)}
-            style={{ animationDelay: `${animationDelay}s` }}
-        >
-            <div className="flex justify-between items-center">
-                <span className="font-mono text-lg font-medium text-primary-foreground">{domain}.com</span>
-                <CheckCircle className="h-6 w-6 text-green-500" />
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">Click to copy</p>
-        </div>
-    );
-}
-
 export default function DomainFinder() {
     const [description, setDescription] = useState('');
+    const [selectedTld, setSelectedTld] = useState<TLD>('com');
     const [results, setResults] = useState<DomainResult[]>([]);
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
@@ -63,7 +36,7 @@ export default function DomainFinder() {
         setResults([]);
 
         startTransition(async () => {
-            const res = await findAvailableDomains(description);
+            const res = await findAvailableDomains(description, selectedTld);
 
             if (!res.success) {
                 toast({
@@ -92,10 +65,10 @@ export default function DomainFinder() {
     };
 
     const handleCopyToClipboard = (domain: string) => {
-        navigator.clipboard.writeText(`${domain}.com`);
+        navigator.clipboard.writeText(`${domain}.${selectedTld}`);
         toast({
             title: 'Copied!',
-            description: `${domain}.com is now in your clipboard.`,
+            description: `${domain}.${selectedTld} is now in your clipboard.`,
         });
     };
 
@@ -107,14 +80,14 @@ export default function DomainFinder() {
             <CardHeader>
                 <div className="flex items-center gap-2 mb-2">
                     <Sparkles className="h-8 w-8 text-primary" />
-                    <CardTitle className="font-headline text-4xl">DomainDarling</CardTitle>
+                    <CardTitle className="font-headline text-4xl">AI Domainly</CardTitle>
                 </div>
                 <CardDescription className="font-body text-base">
-                    Describe your brilliant app, and we'll find the perfect, available .com domain for it.
+                    Describe your brilliant app, and we'll find the perfect, available domain for it.
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} className="space-y-4">
                     <Textarea
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
@@ -122,44 +95,114 @@ export default function DomainFinder() {
                         className="min-h-[100px] text-base font-body"
                         disabled={isPending}
                     />
-                    <Button type="submit" className="w-full mt-4" size="lg" disabled={isPending}>
-                        {isPending ? <Loader2 className="animate-spin" /> : <Search />}
-                        {results.length > 0 ? 'Generate New Ideas' : 'Find My Domain'}
-                    </Button>
+                    <div className="flex gap-4 items-center">
+                        <Select
+                            value={selectedTld}
+                            onValueChange={(value) => setSelectedTld(value as TLD)}
+                            disabled={isPending}
+                        >
+                            <SelectTrigger className="w-[180px] h-[40px] bg-background text-foreground border-input">
+                                <SelectValue>
+                                    {POPULAR_TLDS.map((tld) => (
+                                        tld.value === selectedTld && (
+                                            <div key={tld.value} className="font-medium text-white">
+                                                {tld.label}
+                                            </div>
+                                        )
+                                    ))}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent 
+                                className="max-h-[300px] overflow-y-auto bg-zinc-900 border border-zinc-800" 
+                                position="popper"
+                            >
+                                {POPULAR_TLDS.map((tld) => (
+                                    <SelectItem 
+                                        key={tld.value} 
+                                        value={tld.value}
+                                        className="flex flex-col items-start py-2 hover:bg-zinc-800"
+                                    >
+                                        <div className="flex flex-col gap-0.5">
+                                            <div className="font-medium text-white">{tld.label}</div>
+                                            <div className="text-xs text-zinc-400">{tld.description}</div>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Button type="submit" className="flex-1" size="lg" disabled={isPending}>
+                            {isPending ? <Loader2 className="animate-spin" /> : <Search className="mr-2" />}
+                            {results.length > 0 ? 'Generate New Ideas' : 'Find My Domain'}
+                        </Button>
+                    </div>
                 </form>
 
-                {isPending && (
-                    <div className="text-center p-8 flex flex-col items-center gap-4">
-                        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                        <p className="font-body text-muted-foreground">Let's find your domain...</p>
-                    </div>
-                )}
-                
-                {!isPending && results.length > 0 && (
-                     <div className="mt-6 space-y-4">
-                        {availableResults.length > 0 && (
-                           <div>
-                                <h3 className="text-2xl font-headline text-center mb-4">Here are your available domains!</h3>
-                                <div className="space-y-3">
-                                    {availableResults.map(res => (
-                                        <AvailableDomainCard key={res.domain} domain={res.domain} onSelect={handleCopyToClipboard} />
-                                    ))}
-                                </div>
+                <div className="min-h-[200px] mt-8">
+                    {isPending && (
+                        <div className="text-center p-8 flex flex-col items-center gap-4">
+                            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                            <p className="font-body text-muted-foreground">Let's find your domain...</p>
+                        </div>
+                    )}
+
+                    {availableResults.length > 0 && (
+                        <div>
+                            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                <CheckCircle className="text-green-500" />
+                                Available Domains ({availableResults.length})
+                            </h3>
+                            <div className="space-y-2">
+                                {availableResults.map((result) => (
+                                    <div
+                                        key={result.domain}
+                                        className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20"
+                                    >
+                                        <span className="font-mono text-lg">{result.domain}.{selectedTld}</span>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleCopyToClipboard(result.domain)}
+                                        >
+                                            Copy
+                                        </Button>
+                                    </div>
+                                ))}
                             </div>
-                        )}
-                        
-                        {unavailableResults.length > 0 && (
-                            <div>
-                                <h3 className="text-lg font-headline text-center my-4">Unavailable Domains ({unavailableResults.length})</h3>
-                                <ul className="space-y-2 rounded-lg border p-2 max-h-60 overflow-y-auto">
-                                    {unavailableResults.map((res) => (
-                                        <DomainListItem key={res.domain} domain={res.domain} available={res.available} />
-                                    ))}
-                                 </ul>
-                             </div>
-                        )}
-                    </div>
-                )}
+                            <p className="text-sm text-muted-foreground mt-6 text-center">
+                                Thank you for using the app! API calls cost money, so if you want to help keep this running, feel free to{' '}
+                                <a 
+                                    href="dummy.url" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="underline hover:text-primary transition-colors"
+                                >
+                                    donate
+                                </a>
+                            </p>
+                        </div>
+                    )}
+
+                    {unavailableResults.length > 0 && (
+                        <div className="mt-8">
+                            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                <XCircle className="text-destructive" />
+                                Unavailable Domains ({unavailableResults.length})
+                            </h3>
+                            <div className="space-y-2">
+                                {unavailableResults.map((result) => (
+                                    <div
+                                        key={result.domain}
+                                        className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20"
+                                    >
+                                        <span className="font-mono text-lg line-through opacity-75">
+                                            {result.domain}.{selectedTld}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </CardContent>
         </Card>
     );

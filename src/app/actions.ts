@@ -1,16 +1,20 @@
 
 'use server';
 
-import { generateDomainNames } from '@/ai/flows/generate-domain-names';
-import { checkDomainAvailability } from '@/services/domain-api';
+import { generateDomainNames } from "@/ai/flows/generate-domain-names";
+import { checkDomainAvailability } from "@/services/domain-api";
+import { TLD } from "@/lib/constants";
 
 interface FindDomainsResult {
     success: boolean;
-    results: { domain: string, available: boolean }[];
     error?: string;
+    results: Array<{
+        domain: string;
+        available: boolean;
+    }>;
 }
 
-export async function findAvailableDomains(description: string): Promise<FindDomainsResult> {
+export async function findAvailableDomains(description: string, tld: TLD = 'com'): Promise<FindDomainsResult> {
     try {
         // 1. Generate domain name ideas
         let domainSuggestions;
@@ -34,7 +38,7 @@ export async function findAvailableDomains(description: string): Promise<FindDom
         // 3. Check availability for the batch of domains
         let availableDomains: string[] = [];
         try {
-            availableDomains = await checkDomainAvailability(uniqueSuggestions);
+            availableDomains = await checkDomainAvailability(uniqueSuggestions, tld);
         } catch (error) {
              if (error instanceof Error) {
                 if (error.message.includes('GODADDY_API_KEY') || error.message.includes('GODADDY_API_SECRET')) {
