@@ -10,6 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { CheckCircle, Loader2, Search, Sparkles, XCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POPULAR_TLDS, TLD } from '@/lib/constants';
+import { PurchaseDomainDialog } from '@/components/ui/purchase-domain-dialog';
+import { ShoppingCart } from 'lucide-react';
 
 interface DomainResult {
     domain: string;
@@ -22,6 +24,8 @@ export default function DomainFinder() {
     const [results, setResults] = useState<DomainResult[]>([]);
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
+    const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+    const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
     
     const handleSearch = () => {
         if (!description) {
@@ -158,13 +162,26 @@ export default function DomainFinder() {
                                         className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20"
                                     >
                                         <span className="font-mono text-lg">{result.domain}.{selectedTld}</span>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleCopyToClipboard(result.domain)}
-                                        >
-                                            Copy
-                                        </Button>
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleCopyToClipboard(result.domain)}
+                                            >
+                                                Copy
+                                            </Button>
+                                            <Button
+                                                variant="default"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setSelectedDomain(`${result.domain}.${selectedTld}`);
+                                                    setPurchaseDialogOpen(true);
+                                                }}
+                                            >
+                                                <ShoppingCart className="h-4 w-4 mr-2" />
+                                                Buy Domain
+                                            </Button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -204,6 +221,11 @@ export default function DomainFinder() {
                     )}
                 </div>
             </CardContent>
+            <PurchaseDomainDialog
+                open={purchaseDialogOpen}
+                onOpenChange={setPurchaseDialogOpen}
+                domainName={selectedDomain || ''}
+            />
         </Card>
     );
 }

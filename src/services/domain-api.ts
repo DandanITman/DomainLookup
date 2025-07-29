@@ -3,83 +3,128 @@
 import fetch from 'node-fetch';
 import { TLD } from '@/lib/constants';
 
-const GODADDY_API_URL = 'https://api.ote-godaddy.com/v1/domains/available';
+// Base URL from GoDaddy documentation
+const GODADDY_API_URL = 'https://api.ote-godaddy.com/v1/domains';
 
 interface GoDaddyAvailabilityResponse {
-    available?: boolean;
-    domain?: string;
+    available: boolean;
+    domain: string;
     price?: number;
     currency?: string;
-    code?: string;
-    message?: string;
+    period?: number;
 }
 
-/**
- * Checks a list of domains for availability using the GoDaddy API.
- *
- * @param domains An array of domain names to check (e.g., ["example", "another"]). Do not include the TLD.
- * @param tld The top-level domain to check (e.g., 'com', 'ai', 'org')
- * @returns A promise that resolves to an array of available domain names.
- */
 export async function checkDomainAvailability(domains: string[], tld: TLD = 'com'): Promise<string[]> {
-    const apiKey = process.env.GODADDY_API_KEY;
-    const apiSecret = process.env.GODADDY_API_SECRET;
+    console.log('\n=== Starting Domain Availability Check ===');
+    console.log('Domains to check:', domains);
+    console.log('TLD:', tld);
+
+    const apiKey = process.env.GODADDY_API_KEY?.trim();
+    const apiSecret = process.env.GODADDY_API_SECRET?.trim();
+
+    console.log('\n=== API Credentials ===');
+    console.log({
+        apiKeyPresent: !!apiKey,
+        apiKeyLength: apiKey?.length,
+        apiSecretPresent: !!apiSecret,
+        apiSecretLength: apiSecret?.length,
+        apiKeyFirstChars: apiKey ? `${apiKey.substring(0, 5)}...` : 'missing'
+    });
 
     if (!apiKey || !apiSecret) {
-        throw new Error("GoDaddy API credentials are not configured. Please set GODADDY_API_KEY and GODADDY_API_SECRET in your .env file.");
+        throw new Error("GoDaddy API credentials are not configured properly.");
     }
-    
-    // Add the TLD to each domain
-    const domainsWithTld = domains.map(d => `${d}.${tld}`);
 
     try {
-        // Check domains one by one since the bulk endpoint is having issues
         const availableDomains: string[] = [];
-        
-        for (const domain of domainsWithTld) {
+
+        // Check domains in parallel for better performance
+        const checkPromises = domains.map(async (domain) => {
             try {
-                // Remove any whitespace from API key and secret
-                const cleanApiKey = apiKey.trim();
-                const cleanApiSecret = apiSecret.trim();
+                const fullDomain = `${domain}.${tld}`;
+                // Using the direct availability check endpoint
+                const checkUrl = `${GODADDY_API_URL}/available?domain=${encodeURIComponent(fullDomain)}`;
                 
-                const response = await fetch(`${GODADDY_API_URL}?domain=${encodeURIComponent(domain)}&checkType=FAST&forTransfer=false`, {
+                console.log('\n=== Making API Request ===');
+                console.log('URL:', checkUrl);
+                console.log('Domain:', fullDomain);
+                console.log('Auth:', `sso-key ${apiKey.substring(0, 5)}...`);
+
+                const response = await fetch(checkUrl, {
                     method: 'GET',
                     headers: {
-                        'Authorization': `sso-key ${cleanApiKey}:${cleanApiSecret}`,
+                        'Authorization': `sso-key ${apiKey}:${apiSecret}`,
                         'Accept': 'application/json'
-                    },
+                    }
                 });
 
-                const json = await response.json() as GoDaddyAvailabilityResponse;
+                console.log('\n=== API Response ===');
+                console.log('Status:', response.status);
+                console.log('Status Text:', response.statusText);
+                console.log('Headers:', Object.fromEntries(response.headers.entries()));
                 
+                const responseText = await response.text();
+                console.log('Raw Response:', responseText);
+
                 if (!response.ok) {
-                    console.error(`GoDaddy API HTTP error for ${domain}:`, json);
-                    if (json.code === 'UNABLE_TO_AUTHENTICATE') {
-                        throw new Error('GoDaddy API authentication failed. Please verify your API key and secret.');
-                    }
-                    continue; // Skip this domain and try the next one
+                    console.error('\n=== API Error ===');
+                    console.error({
+                        status: response.status,
+                        statusText: response.statusText,
+                        body: responseText,
+                        headers: Object.fromEntries(response.headers.entries())
+                    });
+                    return null;
                 }
-                
-                if (json.available === true) {
-                    // Remove the TLD when adding to available domains
-                    availableDomains.push(domain.replace(`.${tld}`, ''));
+
+                try {
+                    const result = JSON.parse(responseText) as GoDaddyAvailabilityResponse;
+                    console.log('\n=== Parsed Result ===');
+                    console.log('Result:', result);
+
+                    if (result.available === true) {
+                        console.log('✅ Domain is AVAILABLE:', fullDomain);
+                        return domain;
+                    } else {
+                        console.log('❌ Domain is NOT available:', fullDomain);
+                        return null;
+                    }
+
+                } catch (parseError) {
+                    console.error('\n=== Parse Error ===');
+                    console.error('Failed to parse response:', {
+                        error: parseError instanceof Error ? parseError.message : 'Unknown error',
+                        responseText
+                    });
+                    return null;
                 }
             } catch (error) {
-                console.error(`Error checking domain ${domain}:`, error);
-                if (error instanceof Error && error.message.includes('authentication failed')) {
-                    throw error; // Re-throw authentication errors
-                }
-                continue; // Skip this domain and try the next one
+                console.error('\n=== Request Error ===');
+                console.error(`Error checking domain ${domain}:`, {
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                });
+                return null;
             }
-        }
-            
-        return availableDomains;
+        });
+
+        // Wait for all checks to complete
+        const results = await Promise.all(checkPromises);
+        
+        // Filter out null results and collect available domains
+        const validResults = results.filter((domain): domain is string => domain !== null);
+
+        console.log('\n=== Final Results ===');
+        console.log('Available domains:', validResults);
+        console.log('Total available:', validResults.length);
+        
+        return validResults;
 
     } catch (error) {
-        console.error('Failed to check domains with GoDaddy:', error);
-        if (error instanceof Error) {
-            throw error;
-        }
-        throw new Error('An unknown error occurred during the domain check with GoDaddy.');
+        console.error('\n=== Critical Error ===');
+        console.error('Failed to check domain availability:', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : 'No stack trace'
+        });
+        throw error;
     }
 }

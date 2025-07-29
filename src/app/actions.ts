@@ -36,20 +36,30 @@ export async function findAvailableDomains(description: string, tld: TLD = 'com'
         const uniqueSuggestions = [...new Set(domainSuggestions.map(d => d.toLowerCase().replace(/[^a-z0-9-]/g, '')))];
 
         // 3. Check availability for the batch of domains
-        let availableDomains: string[] = [];
+        let availableDomains;
         try {
             availableDomains = await checkDomainAvailability(uniqueSuggestions, tld);
         } catch (error) {
-             if (error instanceof Error) {
+            console.error("Domain availability check error:", error);
+            if (error instanceof Error) {
                 if (error.message.includes('GODADDY_API_KEY') || error.message.includes('GODADDY_API_SECRET')) {
-                     return { success: false, error: 'The GoDaddy API Key or Secret is missing. Please set them in your .env file.', results: [] };
+                    return { 
+                        success: false, 
+                        error: 'The GoDaddy API credentials are not properly configured. Please check your environment variables.', 
+                        results: [] 
+                    };
                 }
-                if (error.message.includes('Error from GoDaddy API')) {
-                    return { success: false, error: error.message, results: [] };
-                }
+                return { 
+                    success: false, 
+                    error: `API Error: ${error.message}`, 
+                    results: [] 
+                };
             }
-            // Fallback for other errors during lookup
-            return { success: false, error: 'Could not check domain availability. Please verify your GoDaddy API credentials.', results: [] };
+            return { 
+                success: false, 
+                error: 'Could not check domain availability. Please verify your GoDaddy API credentials.', 
+                results: [] 
+            };
         }
         
         // 4. Map all suggestions to results, marking them as available or not

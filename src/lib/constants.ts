@@ -13,4 +13,23 @@ export const POPULAR_TLDS = [
     { value: 'xyz', label: '.xyz', description: 'Modern and flexible' },
 ] as const;
 
-export type TLD = typeof POPULAR_TLDS[number]['value']; 
+export type TLD = typeof POPULAR_TLDS[number]['value'];
+
+export interface DomainRegistrar {
+    name: string;
+    logo: string;
+    referralUrl: string;
+}
+
+export const DOMAIN_REGISTRARS: Record<string, DomainRegistrar> = {
+    namecheap: {
+        name: 'Namecheap',
+        logo: '/namecheap-logo.svg',
+        referralUrl: 'https://www.namecheap.com/domains/registration/results/?domain=DOMAIN_NAME&utm_source=IR&utm_medium=Affiliate&utm_campaign=3935235&affnetwork=ir',
+    },
+    godaddy: {
+        name: 'GoDaddy',
+        logo: '/godaddy-logo.svg',
+        referralUrl: 'https://www.godaddy.com/domainsearch/find?domainToCheck=DOMAIN_NAME',  // Removed affiliate tracking since no ID provided
+    },
+}; 
